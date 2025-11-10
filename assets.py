@@ -18,7 +18,6 @@ from download_app_assets import (
 
 app = typer.Typer(help="Download app assets")
 console = Console()
-output_manager = OutputManager()
 validator = Validator()
 
 
@@ -132,6 +131,7 @@ def download(
 
         console.print(f"\n[bold green]✓ Asset download completed![/bold green]\n")
 
+        output_manager = OutputManager()
         output_manager.print_summary(
             {
                 "App ID": app_id,

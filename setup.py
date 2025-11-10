@@ -4,7 +4,15 @@ setup(
     name="app-store-asset-cli",
     version="0.1.0",
     packages=find_packages(),
-    py_modules=["single_app", "download_app_assets", "output", "validation", "config"],
+    py_modules=[
+        "assets",
+        "config",
+        "download_app_assets",
+        "locale_utils",
+        "main",
+        "output",
+        "validation",
+    ],
     install_requires=[
         "crawl4ai>=0.7.0",
         "aiohttp>=3.8.0",
@@ -17,7 +25,7 @@ setup(
     ],
     entry_points={
         "console_scripts": [
-            "app-store-asset-cli=single_app:app",
+            "app-store-asset-cli=main:app",
         ],
     },
     python_requires=">=3.8",

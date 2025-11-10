@@ -16,12 +16,12 @@ class OutputManager:
     def __init__(self, base_dir: str = "outputs"):
         self.base_dir = Path(base_dir)
         self.console = Console()
-        self._ensure_directories()
 
     def _ensure_directories(self) -> None:
         """Create output directories if they don't exist."""
         directories = ["searches", "scrapes", "analyses", "reports"]
 
+        self.base_dir.mkdir(parents=True, exist_ok=True)
         for directory in directories:
             (self.base_dir / directory).mkdir(parents=True, exist_ok=True)
 
@@ -39,6 +39,7 @@ class OutputManager:
         app_slug: Optional[str] = None,
     ) -> Path:
         """Save data as JSON file (optionally inside an app-specific subdirectory)."""
+        self._ensure_directories()
         output_dir = self.base_dir / subdir
         if app_slug:
             output_dir = output_dir / app_slug
