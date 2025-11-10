@@ -1,4 +1,4 @@
-"""Assets commands for ASO CLI."""
+"""Assets commands for App Store Asset CLI."""
 
 import asyncio
 import json
@@ -9,9 +9,9 @@ from typing import Dict, Optional
 import typer
 from rich.console import Console
 
-from cli.utils.output import OutputManager
-from cli.utils.validation import ValidationError, Validator
-from core.app_store.download_app_assets import (
+from output import OutputManager
+from validation import ValidationError, Validator
+from download_app_assets import (
     AppAssetDownloader,
     create_pdf_report,
 )

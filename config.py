@@ -28,24 +28,15 @@ def _get_path_env(name: str, default: str) -> Path:
 class Settings:
     default_country: str
     default_language: str
-    default_device: str
-    search_output_dir: Path
-    screenshot_output_dir: Path
-    database_path: Path
     http_proxy: Optional[str]
 
 
 def _load_settings() -> Settings:
-    default_country = (_get_env("APP_STORE_DEFAULT_COUNTRY", "tr") or "tr").lower()
+    default_country = (_get_env("APP_STORE_DEFAULT_COUNTRY", "us") or "us").lower()
     default_language = _get_env("APP_STORE_DEFAULT_LANGUAGE", "en") or "en"
-    default_device = (_get_env("APP_STORE_DEFAULT_DEVICE", "iphone") or "iphone").lower()
     return Settings(
         default_country=default_country,
         default_language=default_language,
-        default_device=default_device,
-        search_output_dir=_get_path_env("APP_STORE_SEARCH_OUTPUT_DIR", "app_store_search_results"),
-        screenshot_output_dir=_get_path_env("APP_STORE_SCREENSHOT_OUTPUT_DIR", "app_store_downloads"),
-        database_path=_get_path_env("SCREEN_ASO_DB_PATH", "data/screen_aso.db"),
         http_proxy=_get_env("APP_STORE_HTTP_PROXY"),
     )
 
