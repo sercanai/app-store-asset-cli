@@ -30,6 +30,7 @@ setup(
     },
     python_requires=">=3.8",
     description="Download App Store logos and screenshots",
+    license="MIT",
     author="Your Name",
     classifiers=[
         "Development Status :: 3 - Alpha",
