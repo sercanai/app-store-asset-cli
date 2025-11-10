@@ -703,8 +703,11 @@ def create_pdf_report(
             max_screenshot_height = 250  # Daha büyük boyut
             screenshots_per_row = 3  # Her satırda 3 screenshot
 
+            margin_x = 50
+            margin_y = 50
+
             # İlk etiketi çizmeye yetecek alan yoksa yeni sayfa aç
-            if y_position - (max_screenshot_height + 40) < 50:
+            if y_position - (max_screenshot_height + 40) < margin_y:
                 c.showPage()
                 c.setFont("Helvetica-Bold", 14)
                 c.drawString(50, page_height - 30, f"Country: {country} (continued)")
@@ -713,29 +716,32 @@ def create_pdf_report(
             c.setFont("Helvetica-Bold", 12)
             c.drawString(50, y_position, label_text)
             y_position -= 30
-            
-            x_position = 50
-            
+
+            x_position = margin_x
+
+            max_page_width = page_width - margin_x * 2
             for idx, screenshot_path in enumerate(screenshot_paths):  # TÜM screenshot'lar
                 if not Path(screenshot_path).exists():
                     continue
-                
+
                 try:
                     img = Image.open(screenshot_path)
                     img_width, img_height = img.size
-                    
+
                     # Screenshot boyutunu ayarla (daha yüksek kalite)
-                    scale = max_screenshot_height / img_height
+                    scale_h = max_screenshot_height / img_height
+                    scale_w = max_page_width / img_width if img_width > max_page_width else 1
+                    scale = min(scale_h, scale_w, 1)
                     display_width = img_width * scale
                     display_height = img_height * scale
-                    
-                    # Her 3 screenshot'ta bir yeni satır
-                    if idx > 0 and idx % screenshots_per_row == 0:
-                        x_position = 50
+
+                    # Satır genişliği aşılırsa yeni satıra geç
+                    if x_position + display_width > page_width - margin_x:
+                        x_position = margin_x
                         y_position -= (max_screenshot_height + 40)
-                    
+
                     # Satır sonrası sayfada yer kalmadıysa yeni sayfa aç
-                    if y_position - display_height < 50:
+                    if y_position - display_height < margin_y:
                         c.showPage()
                         c.setFont("Helvetica-Bold", 14)
                         c.drawString(50, page_height - 30, f"Country: {country} (continued)")
@@ -743,8 +749,8 @@ def create_pdf_report(
                         c.setFont("Helvetica-Bold", 12)
                         c.drawString(50, y_position, label_text)
                         y_position -= 30
-                        x_position = 50
-                    
+                        x_position = margin_x
+
                     # Yüksek kaliteli render
                     c.drawImage(
                         screenshot_path,
@@ -755,9 +761,9 @@ def create_pdf_report(
                         preserveAspectRatio=True,
                         mask='auto'  # Daha iyi kalite
                     )
-                    
+
                     x_position += display_width + 20
-                    
+
                 except Exception as e:
                     print(f"  ⚠️  Screenshot PDF'e eklenemedi ({country}, #{idx+1}): {e}")
         
