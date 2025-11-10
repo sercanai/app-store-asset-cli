@@ -247,44 +247,17 @@ class AppAssetDownloader:
         else:
             print(f"  ✗ {country.upper()}: Logo indirilemedi")
             return None
-    
-    async def download_screenshots(
+
+    async def _scrape_screenshot_urls(
         self,
         app_id: str,
-        app_name: str,
         country: str,
         language: Optional[str],
         slug: Optional[str],
         output_subdir: Path,
-        metadata: Optional[Dict[str, Any]] = None
-    ) -> List[Path]:
-        """iPhone screenshot'larını indir."""
-        
-        # Önce iTunes API'den screenshot URL'lerini almayı dene
-        print(f"  🔍 {country.upper()}: iTunes API'den screenshot URL'leri alınıyor...")
-        metadata = metadata or await self.get_app_metadata(app_id, country)
-        
-        if metadata:
-            # screenshotUrls (iPhone) veya ipadScreenshotUrls
-            screenshot_urls = metadata.get("screenshotUrls", [])
-            
-            if screenshot_urls:
-                print(f"  ✓ {country.upper()}: iTunes API'den {len(screenshot_urls)} screenshot URL bulundu")
-                
-                downloaded_paths = []
-                for idx, img_url in enumerate(screenshot_urls):
-                    screenshot_path = output_subdir / f"screenshot_{idx + 1}.jpg"
-                    success = await self.download_file(img_url, screenshot_path)
-                    if success:
-                        downloaded_paths.append(screenshot_path)
-                
-                if downloaded_paths:
-                    print(f"  ✓ {country.upper()}: {len(downloaded_paths)}/{len(screenshot_urls)} screenshot indirildi")
-                    return downloaded_paths
-            else:
-                print(f"  ⚠️  {country.upper()}: iTunes API'de screenshot URL yok, web scraping deneniyor...")
-        
-        # iTunes API'den alınamazsa web scraping yap
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> List[str]:
+        """Scrape App Store page for screenshot URLs as a fallback."""
         slug_value = slug or self._extract_slug(metadata)
         app_url = self._build_app_store_url(
             app_id,
@@ -298,7 +271,7 @@ class AppAssetDownloader:
         if language:
             locale = language.replace("_", "-")
             headers = {"Accept-Language": locale}
-        
+
         try:
             async with AsyncWebCrawler() as crawler:
                 result = await crawler.arun(
@@ -306,31 +279,29 @@ class AppAssetDownloader:
                     bypass_cache=True,
                     wait_until="networkidle",
                     headers=headers,
-                    page_timeout=60000,  # 60 saniye timeout
-                    delay_before_return_html=5.0,  # JavaScript'in çalışması için daha uzun bekle
+                    page_timeout=60000,
+                    delay_before_return_html=5.0,
                     js_code=[
-                        "window.scrollTo(0, 500);",  # Önce biraz scroll
+                        "window.scrollTo(0, 500);",
                         "await new Promise(r => setTimeout(r, 1000));",
-                        "window.scrollTo(0, 1000);",  # Daha fazla scroll (lazy loading için)
+                        "window.scrollTo(0, 1000);",
                         "await new Promise(r => setTimeout(r, 2000));",
-                        "window.scrollTo(0, 1500);",  # Screenshot bölgesine kadar
+                        "window.scrollTo(0, 1500);",
                         "await new Promise(r => setTimeout(r, 2000));",
-                    ]
+                    ],
                 )
-                
+
                 if not result.success:
                     print(f"  ✗ {country.upper()}: Sayfa yüklenemedi")
                     return []
-                
+
                 soup = BeautifulSoup(result.html, 'html.parser')
-                image_urls = []
-                
-                # Debug: Sayfa içeriğini kontrol et
+                image_urls: List[str] = []
+
                 all_pictures = soup.find_all('picture')
                 print(f"  🔍 {country.upper()}: {len(all_pictures)} picture elementi bulundu")
-                
-                # Debug: İlk birkaç picture elementini incele
-                if all_pictures and len(all_pictures) > 0:
+
+                if all_pictures:
                     for idx, pic in enumerate(all_pictures[:3]):
                         pic_class = ' '.join(pic.get('class', [])) if pic.get('class') else 'NO_CLASS'
                         sources = pic.find_all('source')
@@ -338,82 +309,67 @@ class AppAssetDownloader:
                         if sources:
                             first_src = sources[0].get('srcset', '')[:100]
                             print(f"      First srcset: {first_src}...")
-                
-                # Yöntem 1: Tüm picture elementlerinden screenshot URL'lerini al
+
                 print(f"  🔍 {country.upper()}: Tüm source elementleri parse ediliyor...")
-                seen_base_urls = set()  # Aynı screenshot'ın farklı formatlarını takip et
-                
+                seen_base_urls = set()
+
                 for picture in all_pictures:
-                    # Sadece JPG source'ları al (webp'yi atla)
                     jpg_sources = [s for s in picture.find_all('source') if 'image/jpeg' in s.get('type', '')]
-                    
+
                     for source in jpg_sources:
                         srcset = source.get('srcset') or source.get('data-srcset', '')
                         if not srcset or 'mzstatic.com' not in srcset:
                             continue
-                        
-                        # srcset'i parse et
+
                         candidates = self._parse_srcset(srcset)
                         if not candidates:
                             continue
-                        
-                        # En yüksek çözünürlüklü URL'i al (600w)
+
                         candidates.sort(key=lambda x: x[0], reverse=True)
                         score, _, url = candidates[0]
-                        
-                        # Filtrele: AppIcon, marketing, 1200x630 hariç
+
                         if any(exclude in url for exclude in ['AppIcon', 'marketing', '1200x630']):
                             continue
-                        
-                        # Screenshot boyutlarını kontrol et (en az 300x)
+
                         if re.search(r'/(300x|600x|460x|314x|230x|157x)\d+bb', url):
-                            # Base URL'i çıkar (boyut ve format olmadan)
                             base_url = re.sub(r'/\d+x\d+bb.*$', '', url)
-                            
                             if base_url not in seen_base_urls:
                                 seen_base_urls.add(base_url)
                                 image_urls.append(url)
                                 print(f"      Found: {url[:80]}...")
                                 if len(image_urls) >= 10:
                                     break
-                    
+
                     if len(image_urls) >= 10:
                         break
-                
-                # Yöntem 2: Eğer hala bulamadıysak, daha gevşek filtre
+
                 if not image_urls:
                     print(f"  🔍 {country.upper()}: Gevşek filtre ile deneniyor...")
                     for picture in all_pictures:
                         for source in picture.find_all('source'):
                             srcset = source.get('srcset', '')
-                            # is.mzstatic.com domain'i Apple CDN'i - daha geniş filtre
                             if 'is.mzstatic.com' in srcset:
-                                # Herhangi bir iPhone boyutu
                                 if any(size in srcset for size in ['1290x', '1242x', '1170x', '1179x', '1284x', '828x', '750x', '640x']):
                                     for _, _, url in self._parse_srcset(srcset):
                                         if url not in image_urls:
                                             image_urls.append(url)
                                             print(f"      Found: {url[:80]}...")
-                                            if len(image_urls) >= 10:  # Max 10 screenshot
+                                            if len(image_urls) >= 10:
                                                 break
                         if len(image_urls) >= 10:
                             break
-                
-                # Yöntem 3: img tag'lerinden de dene
+
                 if not image_urls:
                     print(f"  🔍 {country.upper()}: img tag'leri deneniyor...")
                     all_imgs = soup.find_all('img')
                     print(f"      Toplam {len(all_imgs)} img elementi bulundu")
-                    
+
                     for img in all_imgs:
                         img_class = ' '.join(img.get('class', [])) if img.get('class') else ''
                         src = img.get('src', '') or img.get('data-src', '') or img.get('data-lazy-src', '')
-                        
-                        # Apple CDN'den gelen tüm resimleri kontrol et
+
                         if src and 'is.mzstatic.com' in src:
-                            # Screenshot boyutlarını kontrol et (daha geniş filtre)
                             if any(size in src for size in ['1290x', '1242x', '1170x', '1179x', '1284x', '828x', '750x', '640x']):
-                                # Yüksek çözünürlük için URL'i düzenle
                                 src = re.sub(r'/\d+x\d+bb\.', '/1290x2796bb.', src)
                                 src = src.replace('.webp', '.jpg')
                                 if src not in image_urls:
@@ -421,19 +377,16 @@ class AppAssetDownloader:
                                     print(f"      Found img: {src[:80]}...")
                                     if len(image_urls) >= 10:
                                         break
-                
-                # Yöntem 4: Tüm source elementlerini direkt tara (son çare)
+
                 if not image_urls:
                     print(f"  🔍 {country.upper()}: Tüm source elementleri taranıyor...")
                     all_sources = soup.find_all('source')
                     print(f"      Toplam {len(all_sources)} source elementi bulundu")
-                    
+
                     for source in all_sources:
                         srcset = source.get('srcset') or source.get('data-srcset', '')
                         if 'is.mzstatic.com' in srcset or 'mzstatic.com' in srcset:
-                            # srcset'teki tüm URL'leri çıkar
                             for _, _, url in self._parse_srcset(srcset):
-                                # iPhone boyutlarını kontrol et
                                 if any(size in url for size in ['1290x', '1242x', '1170x', '1179x', '1284x', '828x', '750x']):
                                     if url not in image_urls:
                                         image_urls.append(url)
@@ -442,33 +395,24 @@ class AppAssetDownloader:
                                             break
                         if len(image_urls) >= 10:
                             break
-                
-                # Yöntem 5: HTML içinde tüm mzstatic URL'lerini regex ile bul
+
                 if not image_urls:
                     print(f"  🔍 {country.upper()}: HTML içinde regex ile aranıyor...")
-                    # Tüm mzstatic URL'lerini bul (daha iyi pattern - tüm geçerli URL karakterleri)
                     all_mzstatic_urls = re.findall(
                         r'https://[a-zA-Z0-9\-._~:/?#\[\]@!$&()*+,;=%]+mzstatic\.com/[a-zA-Z0-9\-._~:/?#\[\]@!$&()*+,;=%]+',
                         result.html
                     )
                     print(f"      Toplam {len(all_mzstatic_urls)} mzstatic URL bulundu")
-                    
-                    # Önce screenshot boyutlarına göre filtrele (ÇOK DAHA GENİŞ)
+
                     screenshot_candidates = []
                     for url in all_mzstatic_urls:
-                        # Hariç tutulacaklar
                         if any(exclude in url for exclude in ['1200x630', 'AppIcon-', 'marketing']):
                             continue
-                        
-                        # /image/thumb/ içeren ve boyut bilgisi olan tüm URL'ler
                         if '/image/thumb/' in url:
-                            # Herhangi bir boyut formatı var mı? (örn: 392x696, 1290x2796, vb.)
                             if re.search(r'\d{3,4}x\d{3,4}', url):
                                 screenshot_candidates.append(url)
-                    
+
                     print(f"      {len(screenshot_candidates)} screenshot adayı bulundu")
-                    
-                    # Eğer hala bulamadıysak, daha da gevşet
                     if not screenshot_candidates:
                         print(f"      Filtre gevşetiliyor...")
                         for url in all_mzstatic_urls:
@@ -477,47 +421,30 @@ class AppAssetDownloader:
                                     if re.search(r'\d{3,4}x\d{3,4}', url):
                                         screenshot_candidates.append(url)
                         print(f"      Gevşek filtre ile {len(screenshot_candidates)} aday bulundu")
-                    
-                    # Unique URL'leri al ve sırala
+
                     unique_candidates = list(dict.fromkeys(screenshot_candidates))
-                    
+
                     for url in unique_candidates:
-                        # URL'i temizle - sadece geçerli karakterlere kadar al
                         url = url.split('&')[0].split('"')[0].split("'")[0].split(')')[0].split(',')[0]
-                        
-                        # .webp veya .png'yi .jpg'ye çevir (ama URL'de zaten varsa değiştirme)
+
                         if url.endswith('.webp'):
                             url = url.replace('.webp', '.jpg')
                         elif url.endswith('.png'):
                             url = url.replace('.png', '.jpg')
                         elif not url.endswith(('.jpg', '.jpeg')):
-                            # Eğer uzantı yoksa .jpg ekle
                             url = url + '.jpg'
-                        
+
                         if url not in image_urls:
                             image_urls.append(url)
                             print(f"      Found regex: {url[:80]}...")
                             if len(image_urls) >= 10:
                                 break
-                
+
                 if not image_urls:
-                    metadata_for_fallback = metadata or await self.get_app_metadata(app_id, country)
-                    api_screenshots = []
-                    if metadata_for_fallback:
-                        api_screenshots = metadata_for_fallback.get("screenshotUrls") or []
-                    if api_screenshots:
-                        image_urls = [self._normalize_image_url(url) for url in api_screenshots[:10]]
-                        print(f"  ✓ {country.upper()}: iTunes API üzerinden {len(image_urls)} screenshot bulundu (fallback)")
-                
-                if not image_urls:
-                    print(f"  ✗ {country.upper()}: Screenshot bulunamadı (app mevcut değil veya screenshot yok)")
-                    # Debug: Tam HTML'i kaydet
                     debug_file = output_subdir / "debug_html_full.txt"
                     with open(debug_file, 'w', encoding='utf-8') as f:
                         f.write(result.html)
                     print(f"      Debug: Tam HTML kaydedildi ({len(result.html)} karakter): {debug_file}")
-                    
-                    # Tüm mzstatic URL'lerini de kaydet
                     debug_urls_file = output_subdir / "debug_urls.txt"
                     all_urls = re.findall(r'https://[^\s"\'<>]+mzstatic\.com/[^\s"\'<>]+', result.html)
                     with open(debug_urls_file, 'w', encoding='utf-8') as f:
@@ -525,24 +452,88 @@ class AppAssetDownloader:
                             f.write(url + '\n')
                     print(f"      Debug: {len(set(all_urls))} unique URL kaydedildi: {debug_urls_file}")
                     return []
-                
-                print(f"  ✓ {country.upper()}: {len(image_urls)} screenshot bulundu")
-                
-                # Screenshot'ları indir
-                downloaded_paths = []
-                for idx, img_url in enumerate(image_urls):
-                    screenshot_path = output_subdir / f"screenshot_{idx + 1}.jpg"
-                    success = await self.download_file(img_url, screenshot_path)
-                    if success:
-                        downloaded_paths.append(screenshot_path)
-                
-                print(f"  ✓ {country.upper()}: {len(downloaded_paths)}/{len(image_urls)} screenshot indirildi")
-                return downloaded_paths
-                
+
+                return image_urls
+        except Exception as error:
+            print(f"  ✗ {country.upper()}: Screenshot hatası: {error}")
+            return []
+    
+    async def download_screenshots(
+        self,
+        app_id: str,
+        app_name: str,
+        country: str,
+        language: Optional[str],
+        slug: Optional[str],
+        output_subdir: Path,
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> List[Path]:
+        """iPhone screenshot'larını indir."""
+        try:
+            print(f"  🔍 {country.upper()}: iTunes API'den screenshot URL'leri alınıyor...")
+            metadata = metadata or await self.get_app_metadata(app_id, country)
+
+            api_urls: List[str] = []
+            if metadata:
+                screenshot_urls = metadata.get("screenshotUrls", []) or []
+                if screenshot_urls:
+                    print(f"  ✓ {country.upper()}: iTunes API'den {len(screenshot_urls)} screenshot URL bulundu")
+                    for url in screenshot_urls[:10]:
+                        normalized_url = self._normalize_image_url(url)
+                        if normalized_url:
+                            api_urls.append(normalized_url)
+                else:
+                    print(f"  ⚠️  {country.upper()}: iTunes API'de screenshot URL yok")
+
+            skip_api = bool(language and not language.lower().startswith("en"))
+            need_scrape = skip_api or not api_urls
+
+            scraped_urls: List[str] = []
+            if need_scrape:
+                print(f"  🔍 {country.upper()}: App Store sayfası taranıyor...")
+                scraped_urls = await self._scrape_screenshot_urls(
+                    app_id,
+                    country,
+                    language,
+                    slug,
+                    output_subdir,
+                    metadata,
+                )
+
+            if skip_api and scraped_urls:
+                print(f"  ℹ️  {country.upper()}: iTunes API atlandı, sadece scraper sonuçları kullanılıyor ({len(scraped_urls)})")
+                image_urls = scraped_urls
+            elif skip_api and not scraped_urls and api_urls:
+                print(f"  ⚠️  {country.upper()}: Scraper sonuç alınamadı; tekrar API verisi kullanılıyor")
+                image_urls = api_urls
+            else:
+                combined = api_urls + scraped_urls
+                image_urls = list(dict.fromkeys(combined))
+                if scraped_urls:
+                    print(f"  ✓ {country.upper()}: Web scraping ile {len(scraped_urls)} ek URL bulundu (toplam {len(image_urls)})")
+                elif not api_urls:
+                    print(f"  ℹ️  {country.upper()}: API sonuçları ve scraper boş, sonuç yok")
+                else:
+                    print(f"  ℹ️  {country.upper()}: iTunes API ekran görüntüleri kullanılıyor")
+
+            if not image_urls:
+                print(f"  ✗ {country.upper()}: Screenshot bulunamadı (app mevcut değil veya screenshot yok)")
+                return []
+
+            downloaded_paths = []
+            for idx, img_url in enumerate(image_urls):
+                screenshot_path = output_subdir / f"screenshot_{idx + 1}.jpg"
+                success = await self.download_file(img_url, screenshot_path)
+                if success:
+                    downloaded_paths.append(screenshot_path)
+
+            print(f"  ✓ {country.upper()}: {len(downloaded_paths)}/{len(image_urls)} screenshot indirildi")
+            return downloaded_paths
+
         except Exception as e:
             print(f"  ✗ {country.upper()}: Screenshot hatası: {e}")
             return []
-    
+
     async def download_assets_for_country(
         self,
         app_id: str,
