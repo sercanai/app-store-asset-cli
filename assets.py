@@ -123,7 +123,7 @@ def download(
         if not no_pdf:
             pdf_output = app_dir / "assets_report.pdf"
             try:
-                create_pdf_report(app_name, app_id, results, pdf_output)
+                create_pdf_report(app_name, app_id, results, pdf_output, app_info)
                 console.print(f"[green]✓[/green] PDF report saved to {pdf_output}")
             except Exception as exc:
                 console.print(f"[yellow]PDF creation failed:[/yellow] {exc}")

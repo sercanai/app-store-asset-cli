@@ -612,16 +612,40 @@ class AppAssetDownloader:
         return results
 
 
+def _optimize_image_for_pdf(image_path: Path, max_width: int = 400, quality: int = 85) -> Optional[Path]:
+    """Optimize image for PDF by resizing and compressing."""
+    try:
+        img = Image.open(image_path)
+        
+        # Calculate new size while maintaining aspect ratio
+        if img.width > max_width:
+            ratio = max_width / img.width
+            new_size = (max_width, int(img.height * ratio))
+            try:
+                img = img.resize(new_size, Image.Resampling.LANCZOS)
+            except AttributeError:
+                img = img.resize(new_size, Image.LANCZOS)
+        
+        # Save optimized version to temp file
+        temp_path = image_path.parent / f"temp_optimized_{image_path.name}"
+        img.save(temp_path, "JPEG", quality=quality, optimize=True)
+        
+        return temp_path
+    except Exception as e:
+        print(f"  ⚠️  Image optimization failed: {e}")
+        return None
+
+
 def create_pdf_report(
     app_name: str,
     app_id: str,
     results: List[Dict[str, Any]],
-    output_path: Path
+    output_path: Path,
+    app_info: Optional[Dict[str, Any]] = None
 ) -> None:
     """İndirilen asset'lerden PDF rapor oluştur."""
     print(f"\n📄 PDF rapor oluşturuluyor...")
     
-    # En az bir asset var mı kontrol et
     has_any_asset = any(
         result.get("logo_path") or result.get("screenshot_paths")
         for result in results
@@ -631,137 +655,292 @@ def create_pdf_report(
         print(f"  ⚠️  Hiç asset indirilemedi, PDF oluşturulmayacak")
         return
     
-    # PDF oluştur (yüksek kalite)
     c = canvas.Canvas(str(output_path), pagesize=landscape(A4))
-    c.setPageCompression(1)  # Compression aktif (dosya boyutu için)
+    c.setPageCompression(1)
     page_width, page_height = landscape(A4)
     
-    # Başlık sayfası
-    c.setFont("Helvetica-Bold", 24)
-    c.drawCentredString(page_width / 2, page_height - 100, f"App Store Assets Report")
+    temp_files = []
     
-    c.setFont("Helvetica", 16)
-    c.drawCentredString(page_width / 2, page_height - 140, f"{app_name}")
-    
-    c.setFont("Helvetica", 12)
-    c.drawCentredString(page_width / 2, page_height - 170, f"App ID: {app_id}")
-    c.drawCentredString(page_width / 2, page_height - 190, f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    
-    c.showPage()
-    
-    # Her ülke için sayfa
-    for result in results:
-        country = result["country"].upper()
-        logo_path = result.get("logo_path")
-        screenshot_paths = result.get("screenshot_paths", [])
+    try:
+        # ===== COVER PAGE =====
+        c.setFont("Helvetica-Bold", 32)
+        c.drawCentredString(page_width / 2, page_height - 80, "App Store Assets Report")
         
-        c.setFont("Helvetica-Bold", 18)
-        c.drawString(50, page_height - 50, f"Country: {country}")
+        # App logo (center, larger)
+        first_logo = None
+        for result in results:
+            logo_path = result.get("logo_path")
+            if logo_path and Path(logo_path).exists():
+                first_logo = logo_path
+                break
         
-        y_position = page_height - 100
-        
-        # Logo göster
-        if logo_path and Path(logo_path).exists():
+        y_pos = page_height - 150
+        if first_logo:
             try:
-                img = Image.open(logo_path)
+                img = Image.open(first_logo)
+                logo_size = 200
                 img_width, img_height = img.size
-                
-                # Logo boyutunu ayarla (max 150x150)
-                max_size = 150
-                scale = min(max_size / img_width, max_size / img_height)
+                scale = min(logo_size / img_width, logo_size / img_height)
                 display_width = img_width * scale
                 display_height = img_height * scale
                 
                 c.drawImage(
-                    logo_path,
-                    50,
-                    y_position - display_height,
+                    first_logo,
+                    (page_width - display_width) / 2,
+                    y_pos - display_height,
+                    width=display_width,
+                    height=display_height,
+                    preserveAspectRatio=True
+                )
+                y_pos -= (display_height + 30)
+            except Exception as e:
+                print(f"  ⚠️  Cover logo error: {e}")
+        
+        # App name
+        c.setFont("Helvetica-Bold", 24)
+        c.drawCentredString(page_width / 2, y_pos, app_name)
+        y_pos -= 40
+        
+        # App metadata
+        if app_info:
+            c.setFont("Helvetica", 14)
+            developer = app_info.get("developer", "N/A")
+            c.drawCentredString(page_width / 2, y_pos, f"Developer: {developer}")
+            y_pos -= 25
+            
+            rating = app_info.get("rating")
+            rating_count = app_info.get("rating_count", 0)
+            if rating:
+                c.drawCentredString(page_width / 2, y_pos, f"⭐ {rating:.1f} ({rating_count:,} ratings)")
+                y_pos -= 25
+            
+            genre = app_info.get("primary_genre", "N/A")
+            version = app_info.get("version", "N/A")
+            c.drawCentredString(page_width / 2, y_pos, f"{genre} • Version {version}")
+            y_pos -= 25
+            
+            price = app_info.get("price", "N/A")
+            c.drawCentredString(page_width / 2, y_pos, f"Price: {price}")
+            y_pos -= 40
+        
+        # Summary stats
+        c.setFont("Helvetica-Bold", 16)
+        c.drawCentredString(page_width / 2, y_pos, "Summary")
+        y_pos -= 30
+        
+        c.setFont("Helvetica", 12)
+        total_countries = len(results)
+        total_logos = sum(1 for r in results if r.get("logo_path"))
+        total_screenshots = sum(r.get("screenshot_count", 0) for r in results)
+        
+        c.drawCentredString(page_width / 2, y_pos, f"Countries: {total_countries} | Logos: {total_logos} | Screenshots: {total_screenshots}")
+        y_pos -= 30
+        
+        c.setFont("Helvetica", 10)
+        c.drawCentredString(page_width / 2, y_pos, f"App ID: {app_id} • Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        
+        c.showPage()
+        
+        # ===== FIRST SCREENSHOTS PAGE =====
+        c.setFont("Helvetica-Bold", 20)
+        c.drawCentredString(page_width / 2, page_height - 50, "First Screenshots - All Countries")
+        
+        margin = 40
+        grid_cols = 4
+        grid_gap = 20
+        available_width = page_width - (margin * 2)
+        cell_width = (available_width - (grid_gap * (grid_cols - 1))) / grid_cols
+        
+        x_pos = margin
+        y_pos = page_height - 100
+        col_count = 0
+        max_screenshot_height = 180
+        
+        for result in results:
+            screenshot_paths = result.get("screenshot_paths", [])
+            if not screenshot_paths:
+                continue
+            
+            first_screenshot = screenshot_paths[0]
+            if not Path(first_screenshot).exists():
+                continue
+            
+            try:
+                # Optimize image
+                optimized = _optimize_image_for_pdf(Path(first_screenshot), max_width=300)
+                if optimized:
+                    temp_files.append(optimized)
+                    img_path = optimized
+                else:
+                    img_path = first_screenshot
+                
+                img = Image.open(img_path)
+                img_width, img_height = img.size
+                
+                # Calculate display size
+                scale = min(cell_width / img_width, max_screenshot_height / img_height)
+                display_width = img_width * scale
+                display_height = img_height * scale
+                
+                # Check if need new row
+                if y_pos - display_height - 40 < margin:
+                    c.showPage()
+                    c.setFont("Helvetica-Bold", 20)
+                    c.drawCentredString(page_width / 2, page_height - 50, "First Screenshots - All Countries (cont.)")
+                    y_pos = page_height - 100
+                    x_pos = margin
+                    col_count = 0
+                
+                # Draw screenshot
+                c.drawImage(
+                    str(img_path),
+                    x_pos + (cell_width - display_width) / 2,
+                    y_pos - display_height,
                     width=display_width,
                     height=display_height,
                     preserveAspectRatio=True
                 )
                 
-                c.setFont("Helvetica", 10)
-                c.drawString(50, y_position - display_height - 15, "App Logo")
+                # Country label
+                c.setFont("Helvetica-Bold", 10)
+                country = result["country"].upper()
+                c.drawCentredString(x_pos + cell_width / 2, y_pos - display_height - 15, country)
                 
-                y_position -= (display_height + 40)
+                col_count += 1
+                
+                if col_count >= grid_cols:
+                    x_pos = margin
+                    y_pos -= (max_screenshot_height + 50)
+                    col_count = 0
+                else:
+                    x_pos += cell_width + grid_gap
+                    
             except Exception as e:
-                print(f"  ⚠️  Logo PDF'e eklenemedi ({country}): {e}")
+                print(f"  ⚠️  First screenshot error ({result['country']}): {e}")
         
-        # Screenshot'ları göster - TÜM screenshot'lar
-        if screenshot_paths:
-            label_text = f"Screenshots ({len(screenshot_paths)})"
-            max_screenshot_height = 250  # Daha büyük boyut
-            screenshots_per_row = 3  # Her satırda 3 screenshot
-
-            margin_x = 50
-            margin_y = 50
-
-            # İlk etiketi çizmeye yetecek alan yoksa yeni sayfa aç
-            if y_position - (max_screenshot_height + 40) < margin_y:
-                c.showPage()
-                c.setFont("Helvetica-Bold", 14)
-                c.drawString(50, page_height - 30, f"Country: {country} (continued)")
-                y_position = page_height - 70
-
-            c.setFont("Helvetica-Bold", 12)
-            c.drawString(50, y_position, label_text)
-            y_position -= 30
-
-            x_position = margin_x
-
-            max_page_width = page_width - margin_x * 2
-            for idx, screenshot_path in enumerate(screenshot_paths):  # TÜM screenshot'lar
-                if not Path(screenshot_path).exists():
-                    continue
-
+        c.showPage()
+        
+        # ===== COUNTRY PAGES =====
+        for result in results:
+            country = result["country"].upper()
+            language = result.get("language", "N/A")
+            logo_path = result.get("logo_path")
+            screenshot_paths = result.get("screenshot_paths", [])
+            
+            c.setFont("Helvetica-Bold", 20)
+            c.drawString(50, page_height - 50, f"🌍 {country} | {language}")
+            
+            y_position = page_height - 100
+            
+            # Logo
+            if logo_path and Path(logo_path).exists():
                 try:
-                    img = Image.open(screenshot_path)
+                    img = Image.open(logo_path)
                     img_width, img_height = img.size
-
-                    # Screenshot boyutunu ayarla (daha yüksek kalite)
-                    scale_h = max_screenshot_height / img_height
-                    scale_w = max_page_width / img_width if img_width > max_page_width else 1
-                    scale = min(scale_h, scale_w, 1)
+                    
+                    max_size = 120
+                    scale = min(max_size / img_width, max_size / img_height)
                     display_width = img_width * scale
                     display_height = img_height * scale
-
-                    # Satır genişliği aşılırsa yeni satıra geç
-                    if x_position + display_width > page_width - margin_x:
-                        x_position = margin_x
-                        y_position -= (max_screenshot_height + 40)
-
-                    # Satır sonrası sayfada yer kalmadıysa yeni sayfa aç
-                    if y_position - display_height < margin_y:
-                        c.showPage()
-                        c.setFont("Helvetica-Bold", 14)
-                        c.drawString(50, page_height - 30, f"Country: {country} (continued)")
-                        y_position = page_height - 70
-                        c.setFont("Helvetica-Bold", 12)
-                        c.drawString(50, y_position, label_text)
-                        y_position -= 30
-                        x_position = margin_x
-
-                    # Yüksek kaliteli render
+                    
                     c.drawImage(
-                        screenshot_path,
-                        x_position,
+                        logo_path,
+                        50,
                         y_position - display_height,
                         width=display_width,
                         height=display_height,
-                        preserveAspectRatio=True,
-                        mask='auto'  # Daha iyi kalite
+                        preserveAspectRatio=True
                     )
-
-                    x_position += display_width + 20
-
+                    
+                    c.setFont("Helvetica", 9)
+                    c.drawString(50, y_position - display_height - 12, "App Logo")
+                    
+                    y_position -= (display_height + 30)
                 except Exception as e:
-                    print(f"  ⚠️  Screenshot PDF'e eklenemedi ({country}, #{idx+1}): {e}")
+                    print(f"  ⚠️  Logo error ({country}): {e}")
+            
+            # Screenshots in 3-column grid
+            if screenshot_paths:
+                c.setFont("Helvetica-Bold", 14)
+                c.drawString(50, y_position, f"Screenshots ({len(screenshot_paths)})")
+                y_position -= 35
+                
+                margin_x = 50
+                margin_y = 50
+                grid_cols = 3
+                gap = 15
+                
+                available_width = page_width - (margin_x * 2)
+                cell_width = (available_width - (gap * (grid_cols - 1))) / grid_cols
+                max_height = 220
+                
+                x_pos = margin_x
+                col = 0
+                
+                for idx, screenshot_path in enumerate(screenshot_paths):
+                    if not Path(screenshot_path).exists():
+                        continue
+                    
+                    try:
+                        # Optimize image
+                        optimized = _optimize_image_for_pdf(Path(screenshot_path), max_width=350)
+                        if optimized:
+                            temp_files.append(optimized)
+                            img_path = optimized
+                        else:
+                            img_path = screenshot_path
+                        
+                        img = Image.open(img_path)
+                        img_width, img_height = img.size
+                        
+                        scale = min(cell_width / img_width, max_height / img_height)
+                        display_width = img_width * scale
+                        display_height = img_height * scale
+                        
+                        # Check page space
+                        if y_position - display_height < margin_y:
+                            c.showPage()
+                            c.setFont("Helvetica-Bold", 16)
+                            c.drawString(50, page_height - 40, f"🌍 {country} (continued)")
+                            y_position = page_height - 80
+                            x_pos = margin_x
+                            col = 0
+                        
+                        # Draw screenshot
+                        c.drawImage(
+                            str(img_path),
+                            x_pos,
+                            y_position - display_height,
+                            width=display_width,
+                            height=display_height,
+                            preserveAspectRatio=True
+                        )
+                        
+                        col += 1
+                        
+                        if col >= grid_cols:
+                            x_pos = margin_x
+                            y_position -= (max_height + gap)
+                            col = 0
+                        else:
+                            x_pos += cell_width + gap
+                            
+                    except Exception as e:
+                        print(f"  ⚠️  Screenshot error ({country}, #{idx+1}): {e}")
+            
+            c.showPage()
         
-        c.showPage()
-    
-    c.save()
-    print(f"✓ PDF rapor kaydedildi: {output_path}")
+        c.save()
+        print(f"✓ PDF rapor kaydedildi: {output_path}")
+        
+    finally:
+        # Cleanup temp files
+        for temp_file in temp_files:
+            try:
+                if temp_file.exists():
+                    temp_file.unlink()
+            except Exception:
+                pass
 
 
 async def run_download(args: Namespace) -> None:
