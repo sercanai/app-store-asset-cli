@@ -40,3 +40,41 @@ If you rerun the command, existing images are overwritten because we recreate th
 
 ## Contributions
 Pull requests, issues, and README improvements are very welcome — feel free to open one when you have a change or suggestion.
+
+## Türkçe
+
+### Özellikler
+- Çok ülkeyle App Store ikon ve ekran görüntüleri indirir (varsayılan `us,tr,jp`) ve dil geçersiz kılmaları almanızı sağlar.
+- İndirilen meta verileri `download_report.json` içinde saklar ve zengin özet tablosu basar.
+- Her ülke için logo ve ekran görüntülerini PDF’e yerleştirerek `assets_report.pdf` oluşturur.
+- Çıktı klasörünü, PDF üretimini ve ülke/dil filtrelerini yapılandırabilirsiniz.
+
+### Kurulum
+```bash
+python -m pip install -r requirements.txt
+python -m pip install -e .
+```
+
+### Kullanım
+```bash
+app-store-asset-cli assets download <app_id>
+```
+Varsayılan olarak `us,tr,jp` ülkelerine bakar. İndirme davranışını şu parametrelerle özelleştirin:
+
+- `--countries us,tr,gb` ile farklı ülke kodları tanımlayın.
+- `--languages tr:tr-tr,jp:ja-jp` ile özel lokal ayarları zorlayın.
+- `--output-dir ./my_assets` ile raporların kaydedildiği klasörü değiştirin.
+- `--no-pdf` ile PDF raporunu atlayın, sadece JSON ve resimleri alın.
+
+Örnek:
+```bash
+app-store-asset-cli assets download 123456789 --countries tr,gb --languages tr:tr-tr --output-dir ./downloads
+```
+
+### Çıktı Düzeni
+`<output_dir>/<app_name>/` altında dosyalar oluşur. Her ülke kendi klasöründe logo ve ekran görüntülerini barındırır (`…/tr`, `…/gb`). Kök klasörde ayrıca:
+
+- `download_report.json` (özet + ülke bazlı meta verileri)
+- `assets_report.pdf` (her ülke için sayfa, lokal logolar/screen shot’lar)
+
+Komutu tekrar çalıştırırsanız ilgili klasör yeniden oluşturulup resimler üzerine yazılır.
