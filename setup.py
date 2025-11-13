@@ -1,4 +1,9 @@
+from pathlib import Path
+
 from setuptools import setup, find_packages
+
+README = Path(__file__).parent / "README.md"
+long_description = README.read_text(encoding="utf-8")
 
 setup(
     name="app-store-asset-cli",
@@ -21,6 +26,8 @@ setup(
     },
     python_requires=">=3.8",
     description="Download App Store logos and screenshots",
+    long_description=long_description,
+    long_description_content_type="text/markdown",
     license="MIT",
     author="Your Name",
     classifiers=[
