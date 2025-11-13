@@ -20,6 +20,16 @@ python -m pip install -r requirements.txt
 python -m pip install -e .
 ```
 
+After installation, crawl4ai expects a Playwright browser binary. Run once:
+```bash
+python -m playwright install --with-deps chromium
+```
+This downloads the Chromium engine Playwright uses for scraping.
+If you want every Playwright browser available, run:
+```bash
+python -m playwright install
+```
+
 ## Usage
 ```bash
 app-store-asset-cli assets download <app_id>
@@ -65,6 +75,16 @@ Geliştirme yapmak isterseniz:
 ```bash
 python -m pip install -r requirements.txt
 python -m pip install -e .
+```
+
+Kurulumdan sonra crawl4ai'nin kullanacağı Playwright tarayıcısını indirmeniz gerekir:
+```bash
+python -m playwright install --with-deps chromium
+```
+Bu komut scraping için kullanılan Chromium motorunu indirir.
+Tüm Playwright tarayıcılarını kurmak isterseniz:
+```bash
+python -m playwright install
 ```
 
 ### Kullanım
