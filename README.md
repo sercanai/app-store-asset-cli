@@ -14,7 +14,7 @@ Install from PyPI for normal CLI usage:
 python -m pip install app-store-asset-cli
 ```
 
-For local development (ideally inside a virtual environment):
+Recommended installation (run inside a fresh virtual environment):
 
 macOS/Linux:
 ```bash
@@ -81,7 +81,7 @@ CLI'yi doğrudan kurmak için:
 python -m pip install app-store-asset-cli
 ```
 
-Yerel geliştirme planlıyorsanız bir sanal ortam oluşturup aşağıdaki adımları izleyin.
+Önerilen kurulum (temiz bir sanal ortam içinde çalıştırın):
 
 macOS/Linux:
 ```bash
