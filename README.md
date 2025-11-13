@@ -60,10 +60,10 @@ Pull requests, issues, and README improvements are very welcome — feel free to
 ## Türkçe
 
 ### Özellikler
-- Çok ülkeyle App Store ikon ve ekran görüntüleri indirir (varsayılan `us,tr,jp`) ve dil geçersiz kılmaları almanızı sağlar.
-- İndirilen meta verileri `download_report.json` içinde saklar ve zengin özet tablosu basar.
-- Her ülke için logo ve ekran görüntülerini PDF’e yerleştirerek `assets_report.pdf` oluşturur.
-- Çıktı klasörünü, PDF üretimini ve ülke/dil filtrelerini yapılandırabilirsiniz.
+- Birden fazla ülke için App Store ikonlarını ve ekran görüntülerini indirir (varsayılan `us,tr,jp`) ve isteğe bağlı dil eşlemesi yapmanıza izin verir.
+- İndirilen meta verileri `download_report.json` dosyasında saklar ve terminalde Rich tabanlı bir özet tablosu gösterir.
+- Her ülkenin logosunu ve ekran görüntülerini `assets_report.pdf` dosyasında düzenleyerek ülke bazlı farkları tek bakışta görmenizi sağlar.
+- Çıktı klasörünü, PDF üretimini ve ülke/dil filtrelerini bayraklarla kolayca özelleştirebilirsiniz.
 
 ### Kurulum
 CLI'yi doğrudan kurmak için:
@@ -71,18 +71,17 @@ CLI'yi doğrudan kurmak için:
 python -m pip install app-store-asset-cli
 ```
 
-Geliştirme yapmak isterseniz:
+Yerel geliştirme planlıyorsanız önce bağımlılıkları, ardından editable kurulumu yapın:
 ```bash
 python -m pip install -r requirements.txt
 python -m pip install -e .
 ```
 
-Kurulumdan sonra crawl4ai'nin kullanacağı Playwright tarayıcısını indirmeniz gerekir:
+Crawl4AI, Playwright'ın Chromium motoruna ihtiyaç duyar; bir kez çalıştırmanız yeterli:
 ```bash
 python -m playwright install --with-deps chromium
 ```
-Bu komut scraping için kullanılan Chromium motorunu indirir.
-Tüm Playwright tarayıcılarını kurmak isterseniz:
+Dilerseniz tüm Playwright tarayıcılarını da kurabilirsiniz:
 ```bash
 python -m playwright install
 ```
@@ -91,12 +90,12 @@ python -m playwright install
 ```bash
 app-store-asset-cli assets download <app_id>
 ```
-Varsayılan olarak `us,tr,jp` ülkelerine bakar. İndirme davranışını şu parametrelerle özelleştirin:
+Komut varsayılan olarak `us,tr,jp` ülkelerini tarar. Davranışı aşağıdaki seçeneklerle değiştirebilirsiniz:
 
-- `--countries us,tr,gb` ile farklı ülke kodları tanımlayın.
-- `--languages tr:tr-tr,jp:ja-jp` ile özel lokal ayarları zorlayın.
-- `--output-dir ./my_assets` ile raporların kaydedildiği klasörü değiştirin.
-- `--no-pdf` ile PDF raporunu atlayın, sadece JSON ve resimleri alın.
+- `--countries us,tr,gb` ile farklı ülke listeleri verin (ISO2, virgülle ayrılmış).
+- `--languages tr:tr-tr,jp:ja-jp` ile ülke bazlı locale zorlamaları tanımlayın.
+- `--output-dir ./my_assets` ile dosyaların kaydedileceği dizini değiştirin.
+- `--no-pdf` ile sadece JSON ve indirilen görselleri üretin.
 
 Örnek:
 ```bash
@@ -104,12 +103,12 @@ app-store-asset-cli assets download 123456789 --countries tr,gb --languages tr:t
 ```
 
 ### Çıktı Düzeni
-`<output_dir>/<app_name>/` altında dosyalar oluşur. Her ülke kendi klasöründe logo ve ekran görüntülerini barındırır (`…/tr`, `…/gb`). Kök klasörde ayrıca:
+Tüm dosyalar `<output_dir>/<app_name>/` altında toplanır. Her ülke için ayrı klasörler oluşur (`…/tr`, `…/gb`); kök dizinde şu özet dosyaları yer alır:
 
-- `download_report.json` (özet + ülke bazlı meta verileri)
-- `assets_report.pdf` (her ülke için sayfa, lokal logolar/screen shot’lar)
+- `download_report.json` (genel özet + ülke bazlı meta veriler)
+- `assets_report.pdf` (her ülke için logo + ekran görüntüsü sayfası)
 
-Komutu tekrar çalıştırırsanız ilgili klasör yeniden oluşturulup resimler üzerine yazılır.
+Komutu tekrar çalıştırdığınızda ilgili uygulama klasörü yeniden oluşturulur; mevcut görseller üzerine yazılır.
 
 <a href="https://github.com/unclecode/crawl4ai">
   <img src="https://raw.githubusercontent.com/unclecode/crawl4ai/main/docs/assets/powered-by-light.svg" alt="Powered by Crawl4AI" width="200"/>
