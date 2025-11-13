@@ -1,6 +1,6 @@
 # App Store Asset CLI
 
-A Typer + Rich powered CLI that pulls App Store logos and screenshots from multiple countries, combines them into structured JSON, and optionally generates a PDF report with each country’s assets.
+A command-line tool that pulls App Store logos and screenshots from multiple countries, combines them into structured JSON, and optionally generates a PDF report with each country’s assets.
 
 ## Features
 - download logos + screenshots per country (default `us,tr,jp`) with optional language overrides
@@ -78,3 +78,7 @@ app-store-asset-cli assets download 123456789 --countries tr,gb --languages tr:t
 - `assets_report.pdf` (her ülke için sayfa, lokal logolar/screen shot’lar)
 
 Komutu tekrar çalıştırırsanız ilgili klasör yeniden oluşturulup resimler üzerine yazılır.
+
+<a href="https://github.com/unclecode/crawl4ai">
+  <img src="https://raw.githubusercontent.com/unclecode/crawl4ai/main/docs/assets/powered-by-light.svg" alt="Powered by Crawl4AI" width="200"/>
+</a>
