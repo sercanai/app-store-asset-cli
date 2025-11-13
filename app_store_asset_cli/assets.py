@@ -14,6 +14,7 @@ from .validation import ValidationError, Validator
 from .download_app_assets import (
     AppAssetDownloader,
     create_pdf_report,
+    sanitize_app_dir_name,
 )
 
 app = typer.Typer(help="Download app assets")
@@ -68,15 +69,16 @@ def download(
             app_name = metadata.get("trackName") if metadata else None
             if not app_name:
                 app_name = f"app_{app_id}"
+            app_dir_name = sanitize_app_dir_name(app_name, fallback=f"app_{app_id}")
             results = await downloader.download_all_countries(
                 app_id,
-                app_name,
+                app_dir_name,
                 country_list,
                 language_map if language_map else None,
             )
-            return app_name, metadata, results
+            return app_name, app_dir_name, metadata, results
 
-        app_name, metadata, results = asyncio.run(orchestrate())
+        app_name, app_dir_name, metadata, results = asyncio.run(orchestrate())
         if not results:
             console.print("[red]No assets were downloaded[/red]")
             raise typer.Exit(1)
@@ -84,8 +86,12 @@ def download(
         total_screenshots = sum(r.get("screenshot_count", 0) for r in results)
         total_logos = sum(1 for r in results if r.get("logo_path"))
 
-        app_dir = output_path / app_name
+        app_dir = output_path / app_dir_name
         app_dir.mkdir(parents=True, exist_ok=True)
+        if app_dir_name != app_name:
+            console.print(
+                f"[yellow]Note:[/yellow] Using sanitized folder name '{app_dir_name}' for filesystem compatibility."
+            )
 
         app_info = {}
         if metadata:

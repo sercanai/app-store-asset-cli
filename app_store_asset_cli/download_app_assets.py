@@ -89,6 +89,48 @@ COUNTRY_LANGUAGE_MAP = {
 }
 
 
+WINDOWS_RESERVED_NAMES = {
+    "CON",
+    "PRN",
+    "AUX",
+    "NUL",
+    "COM1",
+    "COM2",
+    "COM3",
+    "COM4",
+    "COM5",
+    "COM6",
+    "COM7",
+    "COM8",
+    "COM9",
+    "LPT1",
+    "LPT2",
+    "LPT3",
+    "LPT4",
+    "LPT5",
+    "LPT6",
+    "LPT7",
+    "LPT8",
+    "LPT9",
+}
+INVALID_PATH_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1F]')
+
+
+def sanitize_app_dir_name(value: Optional[str], fallback: Optional[str] = None) -> str:
+    """Return a filesystem-safe folder name for storing app assets."""
+    candidate = (value or fallback or "app").strip()
+    normalized = unicodedata.normalize("NFKC", candidate)
+    sanitized = INVALID_PATH_CHARS.sub("_", normalized)
+    sanitized = sanitized.strip().strip(".")
+    if not sanitized:
+        sanitized = (fallback or "app").strip().strip(".") or "app"
+    if sanitized.upper() in WINDOWS_RESERVED_NAMES:
+        sanitized = f"{sanitized}_app"
+    # Avoid extremely long folder names that may exceed MAX_PATH on Windows
+    sanitized = sanitized[:200].rstrip(" .") or sanitized
+    return sanitized or "app"
+
+
 class AppAssetDownloader:
     """App Store'dan logo ve screenshot indiren sınıf."""
     
@@ -544,8 +586,8 @@ class AppAssetDownloader:
         """Belirli bir ülke için tüm asset'leri indir."""
         country_code = (country or "us").lower()
         print(f"\n📍 {country_code.upper()} - İndiriliyor...")
-        
-        country_dir = self.output_dir / app_name / country_code
+        safe_app_dir = sanitize_app_dir_name(app_name)
+        country_dir = self.output_dir / safe_app_dir / country_code
         country_dir.mkdir(parents=True, exist_ok=True)
         metadata = await self.get_app_metadata(app_id, country_code)
         resolved_language = self._resolve_language(country_code, language)
@@ -976,19 +1018,22 @@ async def run_download(args: Namespace) -> None:
     else:
         app_name = args.app_name or f"app_{args.app_id}"
     
+    app_dir_name = sanitize_app_dir_name(app_name, fallback=f"app_{args.app_id}")
     print(f"📱 App Name: {app_name}")
+    if app_dir_name != app_name:
+        print(f"ℹ️  Klasör adı olarak '{app_dir_name}' kullanılacak (dosya sistemi uyumu için).")
     print(f"🌍 Countries: {', '.join([c.upper() for c in countries])}")
     
     # Tüm ülkeler için indir
     results = await downloader.download_all_countries(
         args.app_id,
-        app_name,
+        app_dir_name,
         countries,
         language_map
     )
     
     # JSON rapor kaydet
-    json_output = output_dir / app_name / "download_report.json"
+    json_output = output_dir / app_dir_name / "download_report.json"
     json_output.parent.mkdir(parents=True, exist_ok=True)
     
     # Özet istatistikler
@@ -1030,13 +1075,13 @@ async def run_download(args: Namespace) -> None:
     
     # PDF rapor oluştur
     if not args.no_pdf:
-        pdf_output = output_dir / app_name / "assets_report.pdf"
+        pdf_output = output_dir / app_dir_name / "assets_report.pdf"
         try:
             create_pdf_report(app_name, args.app_id, results, pdf_output)
         except Exception as e:
             print(f"✗ PDF oluşturma hatası: {e}")
     
-    print(f"\n✅ Tamamlandı! Dosyalar: {output_dir / app_name}")
+    print(f"\n✅ Tamamlandı! Dosyalar: {output_dir / app_dir_name}")
 
 
 def parse_args() -> Namespace:
