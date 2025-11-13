@@ -9,6 +9,12 @@ A command-line tool that pulls App Store logos and screenshots from multiple cou
 - configurable output directory, PDF generation toggle, and country/language filters
 
 ## Installation
+Install from PyPI for normal CLI usage:
+```bash
+python -m pip install app-store-asset-cli
+```
+
+For local development:
 ```bash
 python -m pip install -r requirements.txt
 python -m pip install -e .
@@ -50,6 +56,12 @@ Pull requests, issues, and README improvements are very welcome — feel free to
 - Çıktı klasörünü, PDF üretimini ve ülke/dil filtrelerini yapılandırabilirsiniz.
 
 ### Kurulum
+CLI'yi doğrudan kurmak için:
+```bash
+python -m pip install app-store-asset-cli
+```
+
+Geliştirme yapmak isterseniz:
 ```bash
 python -m pip install -r requirements.txt
 python -m pip install -e .
