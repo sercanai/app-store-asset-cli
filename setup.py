@@ -7,7 +7,7 @@ long_description = README.read_text(encoding="utf-8")
 
 setup(
     name="app-store-asset-cli",
-    version="0.1.0",
+    version="0.1.1",
     packages=find_packages(),
     install_requires=[
         "crawl4ai>=0.7.0",
