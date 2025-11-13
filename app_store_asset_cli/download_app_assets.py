@@ -27,7 +27,7 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
 from PIL import Image
 
-from config import settings
+from .config import settings
 
 
 DEFAULT_COUNTRIES = ["us", "tr", "jp", "ca", "gb", "de", "fr"]

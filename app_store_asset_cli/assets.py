@@ -9,9 +9,9 @@ from typing import Dict, Optional
 import typer
 from rich.console import Console
 
-from output import OutputManager
-from validation import ValidationError, Validator
-from download_app_assets import (
+from .output import OutputManager
+from .validation import ValidationError, Validator
+from .download_app_assets import (
     AppAssetDownloader,
     create_pdf_report,
 )

@@ -3,7 +3,7 @@
 import typer
 from rich.console import Console
 
-import assets
+from . import assets
 
 app = typer.Typer(
     name="app-store-asset-cli",
