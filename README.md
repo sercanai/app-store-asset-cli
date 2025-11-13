@@ -14,10 +14,20 @@ Install from PyPI for normal CLI usage:
 python -m pip install app-store-asset-cli
 ```
 
-For local development:
+For local development (ideally inside a virtual environment):
+
+macOS/Linux:
 ```bash
-python -m pip install -r requirements.txt
-python -m pip install -e .
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install app-store-asset-cli
+```
+
+Windows:
+```powershell
+python -m venv .venv
+.\.venv\Scripts\activate
+python -m pip install app-store-asset-cli
 ```
 
 After installation, crawl4ai expects a Playwright browser binary. Run once:
@@ -71,10 +81,20 @@ CLI'yi doğrudan kurmak için:
 python -m pip install app-store-asset-cli
 ```
 
-Yerel geliştirme planlıyorsanız önce bağımlılıkları, ardından editable kurulumu yapın:
+Yerel geliştirme planlıyorsanız bir sanal ortam oluşturup aşağıdaki adımları izleyin.
+
+macOS/Linux:
 ```bash
-python -m pip install -r requirements.txt
-python -m pip install -e .
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install app-store-asset-cli
+```
+
+Windows:
+```powershell
+python -m venv .venv
+.\.venv\Scripts\activate
+python -m pip install app-store-asset-cli
 ```
 
 Crawl4AI, Playwright'ın Chromium motoruna ihtiyaç duyar; bir kez çalıştırmanız yeterli:
